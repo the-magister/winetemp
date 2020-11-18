@@ -11,7 +11,7 @@ void setup()
 {
   Serial.begin(115200);
   Serial.println();
-  Serial.println("Status\tHumidity (%)\tTemperature (C)\t(F)\tHeatIndex (C)\t(F)");
+  Serial.println();
   String thisBoard= ARDUINO_BOARD;
   Serial.println(thisBoard);
 
@@ -23,21 +23,29 @@ void setup()
 
 void loop()
 {
-  delay(dht.getMinimumSamplingPeriod());
+  static byte loops = 0;
+  delay(dht.getMinimumSamplingPeriod() * 2);
 
   float humidity = dht.getHumidity();
   float temperature = dht.getTemperature();
-
+  int8_t digits = dht.getNumberOfDecimalsTemperature()+1;
+  loops++;
+  
+  Serial.print(loops);
+  Serial.print("\t\t");
   Serial.print(dht.getStatusString());
-  Serial.print("\t");
-  Serial.print(humidity, 1);
+  Serial.print("\t\tH:");
+  Serial.print(humidity, digits);
+  Serial.print("\t\tT:");
+//  Serial.print(temperature, digits);
+//  Serial.print("\t\t");
+  Serial.print(dht.toFahrenheit(temperature), digits);
   Serial.print("\t\t");
-  Serial.print(temperature, 1);
-  Serial.print("\t\t");
-  Serial.print(dht.toFahrenheit(temperature), 1);
-  Serial.print("\t\t");
-  Serial.print(dht.computeHeatIndex(temperature, humidity, false), 1);
-  Serial.print("\t\t");
-  Serial.println(dht.computeHeatIndex(dht.toFahrenheit(temperature), humidity, true), 1);
-  delay(2000);
+//  Serial.print(dht.computeHeatIndex(temperature, humidity, false), digits);
+//  Serial.print("\t\t");
+//  Serial.println(dht.computeHeatIndex(dht.toFahrenheit(temperature), humidity, true), digits);
+  Serial.println();
+
+  if(loops >=3 ) {
+  }
 }
