@@ -45,7 +45,7 @@ WiFiClient client;
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
 String key1 = KEY1;
 String key2 = KEY2;
-String key = key1+key2;
+String key = key1 + key2;
 Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, key.c_str());
 
 /****************************** Feeds ***************************************/
@@ -69,9 +69,6 @@ float humidity, temperature;
 void setup() {
   Serial.begin(115200);
   delay(10);
-
-  pinMode(BUILTIN_LED, OUTPUT);
-  digitalWrite(BUILTIN_LED, LOW);
 
   String thisBoard = ARDUINO_BOARD;
   Serial.println(thisBoard);
@@ -100,11 +97,15 @@ void setup() {
   mqtt.subscribe(&sleep);
 
   Serial << "Setup.  complete." << endl;
+
+  pinMode(BUILTIN_LED, OUTPUT);
+  digitalWrite(BUILTIN_LED, LOW);
 }
 
 uint32_t x = 0;
 
 void loop() {
+  static boolean ledState;
 
   // Ensure the connection to the MQTT server is alive (this will make the first
   // connection and automatically reconnect when disconnected).  See the MQTT_connect
@@ -113,6 +114,7 @@ void loop() {
   if ( mqttConnect.check() && !mqtt.connected() ) {
     Serial << "Trying to connect to MQTT broker..."  << endl;
     mqtt.connect();
+
   }
 
   if (mqtt.connected()) {
@@ -149,6 +151,9 @@ void loop() {
 
         break;
       }
+      ledState = !ledState;
+      digitalWrite(BUILTIN_LED, ledState);
+
     }
 
     // Now we can publish stuff!
@@ -173,7 +178,8 @@ void loop() {
 
       delay(5000);
       digitalWrite(BUILTIN_LED, HIGH);
-
+      delay(300);
+      
       ESP.deepSleep(sleepUS); // wake up the module later...
       delay(1000);
     }
