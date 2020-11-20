@@ -32,7 +32,8 @@
 #define AIO_SERVER      "io.adafruit.com"
 #define AIO_SERVERPORT  1883                   // use 8883 for SSL
 #define AIO_USERNAME    "magister"
-#define AIO_KEY         "aio_VEwa41p2bvYUTAHgqNyWOnHZP1Qy"
+#define KEY1            "aio_mPQT80dLABXry"
+#define KEY2            "NgWV9Md7mLQTQA8"
 
 /************ Global State (you don't need to change this!) ******************/
 
@@ -42,7 +43,10 @@ WiFiClient client;
 //WiFiClientSecure client;
 
 // Setup the MQTT client class by passing in the WiFi client and MQTT server and login details.
-Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, AIO_KEY);
+String key1 = KEY1;
+String key2 = KEY2;
+String key = key1+key2;
+Adafruit_MQTT_Client mqtt(&client, AIO_SERVER, AIO_SERVERPORT, AIO_USERNAME, key.c_str());
 
 /****************************** Feeds ***************************************/
 
@@ -116,13 +120,15 @@ void loop() {
 
     Serial << "MQTT sleepGet..." << endl;
     // https://io.adafruit.com/api/docs/mqtt.html#using-the-get-topic
-    while(!sleepGet.publish("?")) { delay(5000); }
+    while (!sleepGet.publish("?")) {
+      delay(5000);
+    }
 
     float sleepUS = 3600e6;
     Serial << "MQTT sleep message..." << endl;
     Metro waitForMessage(30000);
     waitForMessage.reset();
-    
+
     while (!waitForMessage.check()) {
       Adafruit_MQTT_Subscribe *subscription;
       subscription = mqtt.readSubscription(5000);
@@ -130,13 +136,14 @@ void loop() {
       if (subscription == &sleep) {
         Serial.print(F("Sleep: "));
         Serial.println((char *)sleep.lastread);
-        
-        uint16_t sleepMinutes = atoi((char *)sleep.lastread);  // convert to a number
-        sleepMinutes = constrain(sleepMinutes, 1, 1440);
-        Serial << sleepMinutes << " minutes\t";
-       
-        sleepUS = (float)sleepMinutes * 60.0 * 1e6; // m -> s -> us
+
+        uint16_t sleepHours = atoi((char *)sleep.lastread);  // convert to a number
+        sleepHours = constrain(sleepHours, 1, 24);
+        Serial << sleepHours << " hours\t";
+
+        sleepUS = (float)sleepHours * 60.0 * 60.0 * 1e6; // h -> m -> s -> us
         Serial << sleepUS << " microseconds\t";
+
 
         Serial << endl;
 
@@ -162,7 +169,7 @@ void loop() {
       */
 
       Serial.print("sleeping for ");
-      Serial << sleepUS/1e6 << " seconds....";
+      Serial << sleepUS / 1e6 << " seconds....";
 
       delay(5000);
       digitalWrite(BUILTIN_LED, HIGH);
