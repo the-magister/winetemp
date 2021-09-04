@@ -99,7 +99,7 @@ void setup() {
   Serial << "Setup.  complete." << endl;
 
   pinMode(BUILTIN_LED, OUTPUT);
-  digitalWrite(BUILTIN_LED, LOW);
+  digitalWrite(BUILTIN_LED, LOW); // light on.
 }
 
 uint32_t x = 0;
@@ -120,14 +120,14 @@ void loop() {
   if (mqtt.connected()) {
     Serial << "MQTT Connected." << endl;
 
-    Serial << "MQTT sleepGet..." << endl;
+    Serial << "MQTT sleepGet ping..." << endl;
     // https://io.adafruit.com/api/docs/mqtt.html#using-the-get-topic
     while (!sleepGet.publish("?")) {
       delay(5000);
     }
 
     float sleepUS = 3600e6;
-    Serial << "MQTT sleep message..." << endl;
+    Serial << "MQTT sleep message wait ..." << endl;
     Metro waitForMessage(30000);
     waitForMessage.reset();
 
@@ -136,16 +136,15 @@ void loop() {
       subscription = mqtt.readSubscription(5000);
       // check if its the sleep feed
       if (subscription == &sleep) {
-        Serial.print(F("Sleep: "));
+        Serial.print(F("Sleep messgage = "));
         Serial.println((char *)sleep.lastread);
 
         uint16_t sleepHours = atoi((char *)sleep.lastread);  // convert to a number
         sleepHours = constrain(sleepHours, 1, 24);
-        Serial << sleepHours << " hours\t";
+        Serial << "Is " << sleepHours << " hours\t or ";
 
         sleepUS = (float)sleepHours * 60.0 * 60.0 * 1e6; // h -> m -> s -> us
-        Serial << sleepUS << " microseconds\t";
-
+        Serial << sleepUS << " us\t";
 
         Serial << endl;
 
