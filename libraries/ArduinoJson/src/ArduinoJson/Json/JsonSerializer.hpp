@@ -1,126 +1,165 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 
 #pragma once
 
 #include <ArduinoJson/Json/TextFormatter.hpp>
-#include <ArduinoJson/Misc/Visitable.hpp>
 #include <ArduinoJson/Serialization/measure.hpp>
 #include <ArduinoJson/Serialization/serialize.hpp>
+#include <ArduinoJson/Variant/VariantDataVisitor.hpp>
 
-namespace ARDUINOJSON_NAMESPACE {
+ARDUINOJSON_BEGIN_PRIVATE_NAMESPACE
 
 template <typename TWriter>
-class JsonSerializer {
+class JsonSerializer : public VariantDataVisitor<size_t> {
  public:
-  JsonSerializer(TWriter writer) : _formatter(writer) {}
+  static const bool producesText = true;
 
-  FORCE_INLINE void visitArray(const CollectionData &array) {
+  JsonSerializer(TWriter writer, const ResourceManager* resources)
+      : formatter_(writer), resources_(resources) {}
+
+  size_t visit(const ArrayData& array) {
     write('[');
 
-    VariantSlot *slot = array.head();
+    auto slotId = array.head();
 
-    while (slot != 0) {
-      slot->data()->accept(*this);
+    while (slotId != NULL_SLOT) {
+      auto slot = resources_->getVariant(slotId);
 
-      slot = slot->next();
-      if (slot == 0)
-        break;
+      slot->accept(*this, resources_);
 
-      write(',');
+      slotId = slot->next();
+
+      if (slotId != NULL_SLOT)
+        write(',');
     }
 
     write(']');
+    return bytesWritten();
   }
 
-  void visitObject(const CollectionData &object) {
+  size_t visit(const ObjectData& object) {
     write('{');
 
-    VariantSlot *slot = object.head();
+    auto slotId = object.head();
 
-    while (slot != 0) {
-      _formatter.writeString(slot->key());
-      write(':');
-      slot->data()->accept(*this);
+    bool isKey = true;
 
-      slot = slot->next();
-      if (slot == 0)
-        break;
+    while (slotId != NULL_SLOT) {
+      auto slot = resources_->getVariant(slotId);
+      slot->accept(*this, resources_);
 
-      write(',');
+      slotId = slot->next();
+
+      if (slotId != NULL_SLOT)
+        write(isKey ? ':' : ',');
+
+      isKey = !isKey;
     }
 
     write('}');
+    return bytesWritten();
   }
 
-  void visitFloat(Float value) {
-    _formatter.writeFloat(value);
+  template <typename T>
+  enable_if_t<is_floating_point<T>::value, size_t> visit(T value) {
+    formatter_.writeFloat(value);
+    return bytesWritten();
   }
 
-  void visitString(const char *value) {
-    _formatter.writeString(value);
+  size_t visit(const char* value) {
+    formatter_.writeString(value);
+    return bytesWritten();
   }
 
-  void visitRawJson(const char *data, size_t n) {
-    _formatter.writeRaw(data, n);
+  size_t visit(JsonString value) {
+    formatter_.writeString(value.c_str(), value.size());
+    return bytesWritten();
   }
 
-  void visitNegativeInteger(UInt value) {
-    _formatter.writeNegativeInteger(value);
+  size_t visit(RawString value) {
+    formatter_.writeRaw(value.data(), value.size());
+    return bytesWritten();
   }
 
-  void visitPositiveInteger(UInt value) {
-    _formatter.writePositiveInteger(value);
+  size_t visit(JsonInteger value) {
+    formatter_.writeInteger(value);
+    return bytesWritten();
   }
 
-  void visitBoolean(bool value) {
-    _formatter.writeBoolean(value);
+  size_t visit(JsonUInt value) {
+    formatter_.writeInteger(value);
+    return bytesWritten();
   }
 
-  void visitNull() {
-    _formatter.writeRaw("null");
+  size_t visit(bool value) {
+    formatter_.writeBoolean(value);
+    return bytesWritten();
   }
 
-  size_t bytesWritten() const {
-    return _formatter.bytesWritten();
+  size_t visit(nullptr_t) {
+    formatter_.writeRaw("null");
+    return bytesWritten();
   }
 
  protected:
-  void write(char c) {
-    _formatter.writeRaw(c);
+  size_t bytesWritten() const {
+    return formatter_.bytesWritten();
   }
 
-  void write(const char *s) {
-    _formatter.writeRaw(s);
+  void write(char c) {
+    formatter_.writeRaw(c);
+  }
+
+  void write(const char* s) {
+    formatter_.writeRaw(s);
   }
 
  private:
-  TextFormatter<TWriter> _formatter;
+  TextFormatter<TWriter> formatter_;
+
+ protected:
+  const ResourceManager* resources_;
 };
 
-template <typename TSource, typename TDestination>
-size_t serializeJson(const TSource &source, TDestination &destination) {
+ARDUINOJSON_END_PRIVATE_NAMESPACE
+
+ARDUINOJSON_BEGIN_PUBLIC_NAMESPACE
+
+// Produces a minified JSON document.
+// https://arduinojson.org/v7/api/json/serializejson/
+template <
+    typename TDestination,
+    detail::enable_if_t<!detail::is_pointer<TDestination>::value, int> = 0>
+size_t serializeJson(JsonVariantConst source, TDestination& destination) {
+  using namespace detail;
   return serialize<JsonSerializer>(source, destination);
 }
 
-template <typename TSource>
-size_t serializeJson(const TSource &source, void *buffer, size_t bufferSize) {
+// Produces a minified JSON document.
+// https://arduinojson.org/v7/api/json/serializejson/
+inline size_t serializeJson(JsonVariantConst source, void* buffer,
+                            size_t bufferSize) {
+  using namespace detail;
   return serialize<JsonSerializer>(source, buffer, bufferSize);
 }
 
-template <typename TSource>
-size_t measureJson(const TSource &source) {
+// Computes the length of the document that serializeJson() produces.
+// https://arduinojson.org/v7/api/json/measurejson/
+inline size_t measureJson(JsonVariantConst source) {
+  using namespace detail;
   return measure<JsonSerializer>(source);
 }
 
 #if ARDUINOJSON_ENABLE_STD_STREAM
-template <typename T>
-inline typename enable_if<IsVisitable<T>::value, std::ostream &>::type
-operator<<(std::ostream &os, const T &source) {
+template <typename T,
+          detail::enable_if_t<
+              detail::is_convertible<T, JsonVariantConst>::value, int> = 0>
+inline std::ostream& operator<<(std::ostream& os, const T& source) {
   serializeJson(source, os);
   return os;
 }
 #endif
 
-}  // namespace ARDUINOJSON_NAMESPACE
+ARDUINOJSON_END_PUBLIC_NAMESPACE

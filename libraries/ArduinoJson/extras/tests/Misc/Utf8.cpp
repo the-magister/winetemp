@@ -1,5 +1,5 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 
 #include <ArduinoJson.h>
@@ -7,17 +7,17 @@
 
 #include <string>
 
-using namespace ARDUINOJSON_NAMESPACE;
+using namespace ArduinoJson::detail;
 
 static void testCodepoint(uint32_t codepoint, std::string expected) {
-  char buffer[4096];
-  MemoryPool pool(buffer, 4096);
-  StringBuilder str(&pool);
+  ResourceManager resources;
+  StringBuilder str(&resources);
+  str.startString();
 
   CAPTURE(codepoint);
   Utf8::encodeCodepoint(codepoint, str);
 
-  REQUIRE(str.complete() == expected);
+  REQUIRE(str.str().c_str() == expected);
 }
 
 TEST_CASE("Utf8::encodeCodepoint()") {

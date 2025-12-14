@@ -1,23 +1,26 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 
 #include <ArduinoJson.h>
 #include <catch.hpp>
 #include <string>
 
-static void checkObject(const JsonObject obj, const std::string &expected) {
+static void checkObject(const JsonObject obj, const std::string& expected) {
   char actual[256];
+  memset(actual, '!', sizeof(actual));
+
   size_t actualLen = serializeJson(obj, actual);
   size_t measuredLen = measureJson(obj);
 
-  REQUIRE(expected == actual);
-  REQUIRE(expected.size() == actualLen);
   REQUIRE(expected.size() == measuredLen);
+  REQUIRE(expected.size() == actualLen);
+  REQUIRE(actual[actualLen] == 0);  // serializeJson() adds a null terminator
+  REQUIRE(expected == actual);
 }
 
 TEST_CASE("serializeJson(JsonObject)") {
-  DynamicJsonDocument doc(4096);
+  JsonDocument doc;
   JsonObject obj = doc.to<JsonObject>();
 
   SECTION("EmptyObject") {
@@ -81,8 +84,8 @@ TEST_CASE("serializeJson(JsonObject)") {
   }
 
   SECTION("TwoNull") {
-    obj["a"] = static_cast<char *>(0);
-    obj["b"] = static_cast<char *>(0);
+    obj["a"] = static_cast<char*>(0);
+    obj["b"] = static_cast<char*>(0);
     checkObject(obj, "{\"a\":null,\"b\":null}");
   }
 
@@ -93,10 +96,10 @@ TEST_CASE("serializeJson(JsonObject)") {
   }
 
   SECTION("ThreeNestedArrays") {
-    DynamicJsonDocument b(4096);
-    DynamicJsonDocument c(4096);
+    JsonDocument b;
+    JsonDocument c;
 
-    obj.createNestedArray("a");
+    obj["a"].to<JsonArray>();
     obj["b"] = b.to<JsonArray>();
     obj["c"] = c.to<JsonArray>();
 
@@ -104,10 +107,10 @@ TEST_CASE("serializeJson(JsonObject)") {
   }
 
   SECTION("ThreeNestedObjects") {
-    DynamicJsonDocument b(4096);
-    DynamicJsonDocument c(4096);
+    JsonDocument b;
+    JsonDocument c;
 
-    obj.createNestedObject("a");
+    obj["a"].to<JsonObject>();
     obj["b"] = b.to<JsonObject>();
     obj["c"] = c.to<JsonObject>();
 

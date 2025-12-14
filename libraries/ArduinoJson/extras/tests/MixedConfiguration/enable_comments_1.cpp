@@ -1,5 +1,5 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 
 #define ARDUINOJSON_ENABLE_COMMENTS 1
@@ -8,7 +8,7 @@
 #include <catch.hpp>
 
 TEST_CASE("Comments in arrays") {
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
 
   SECTION("Block comments") {
     SECTION("Before opening bracket") {
@@ -161,7 +161,7 @@ TEST_CASE("Comments in arrays") {
 }
 
 TEST_CASE("Comments in objects") {
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
 
   SECTION("Block comments") {
     SECTION("Before opening brace") {
@@ -371,18 +371,24 @@ TEST_CASE("Comments in objects") {
 }
 
 TEST_CASE("Comments alone") {
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
 
-  SECTION("Just a trailing comment") {
+  SECTION("Just a trailing comment with no line break") {
     DeserializationError err = deserializeJson(doc, "// comment");
 
     REQUIRE(err == DeserializationError::IncompleteInput);
   }
 
+  SECTION("Just a trailing comment with no a break") {
+    DeserializationError err = deserializeJson(doc, "// comment\n");
+
+    REQUIRE(err == DeserializationError::EmptyInput);
+  }
+
   SECTION("Just a block comment") {
     DeserializationError err = deserializeJson(doc, "/*comment*/");
 
-    REQUIRE(err == DeserializationError::IncompleteInput);
+    REQUIRE(err == DeserializationError::EmptyInput);
   }
 
   SECTION("Just a slash") {

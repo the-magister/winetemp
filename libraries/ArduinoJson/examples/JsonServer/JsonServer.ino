@@ -1,5 +1,5 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 //
 // This example shows how to implement an HTTP server that sends a JSON document
@@ -13,7 +13,7 @@
 //   "digital": [1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0]
 // }
 //
-// https://arduinojson.org/v6/example/http-server/
+// https://arduinojson.org/v7/example/http-server/
 
 #include <ArduinoJson.h>
 #include <Ethernet.h>
@@ -25,7 +25,8 @@ EthernetServer server(80);
 void setup() {
   // Initialize serial port
   Serial.begin(9600);
-  while (!Serial) continue;
+  while (!Serial)
+    continue;
 
   // Initialize Ethernet libary
   if (!Ethernet.begin(mac)) {
@@ -46,19 +47,20 @@ void loop() {
   EthernetClient client = server.available();
 
   // Do we have a client?
-  if (!client) return;
+  if (!client)
+    return;
 
   Serial.println(F("New client"));
 
   // Read the request (we ignore the content in this example)
-  while (client.available()) client.read();
+  while (client.available())
+    client.read();
 
   // Allocate a temporary JsonDocument
-  // Use arduinojson.org/v6/assistant to compute the capacity.
-  StaticJsonDocument<500> doc;
+  JsonDocument doc;
 
   // Create the "analog" array
-  JsonArray analogValues = doc.createNestedArray("analog");
+  JsonArray analogValues = doc["analog"].to<JsonArray>();
   for (int pin = 0; pin < 6; pin++) {
     // Read the analog input
     int value = analogRead(pin);
@@ -68,7 +70,7 @@ void loop() {
   }
 
   // Create the "digital" array
-  JsonArray digitalValues = doc.createNestedArray("digital");
+  JsonArray digitalValues = doc["digital"].to<JsonArray>();
   for (int pin = 0; pin < 14; pin++) {
     // Read the digital input
     int value = digitalRead(pin);
@@ -95,6 +97,12 @@ void loop() {
   // Disconnect
   client.stop();
 }
+
+// Performance issue?
+// ------------------
+//
+// EthernetClient is an unbuffered stream, which is not optimal for ArduinoJson.
+// See: https://arduinojson.org/v7/how-to/improve-speed/
 
 // See also
 // --------

@@ -1,8 +1,6 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
-
-#include "progmem_emulation.hpp"
 
 #define ARDUINOJSON_ENABLE_PROGMEM 1
 #include <ArduinoJson.h>
@@ -10,7 +8,7 @@
 #include <catch.hpp>
 
 TEST_CASE("Flash strings") {
-  DynamicJsonDocument doc(2048);
+  JsonDocument doc;
 
   SECTION("deserializeJson()") {
     DeserializationError err = deserializeJson(doc, F("{'hello':'world'}"));
@@ -52,34 +50,42 @@ TEST_CASE("Flash strings") {
   }
 }
 
+TEST_CASE("parseNumber()") {  // tables are in Flash
+  using ArduinoJson::detail::parseNumber;
+
+  CHECK(parseNumber<float>("1") == 1.f);
+  CHECK(parseNumber<float>("1.23") == 1.23f);
+  CHECK(parseNumber<float>("-1.23e34") == -1.23e34f);
+}
+
 TEST_CASE("strlen_P") {
-  CHECK(strlen_P(FC("")) == 0);
-  CHECK(strlen_P(FC("a")) == 1);
-  CHECK(strlen_P(FC("ac")) == 2);
+  CHECK(strlen_P(PSTR("")) == 0);
+  CHECK(strlen_P(PSTR("a")) == 1);
+  CHECK(strlen_P(PSTR("ac")) == 2);
 }
 
 TEST_CASE("strncmp_P") {
-  CHECK(strncmp_P("a", FC("b"), 0) == 0);
-  CHECK(strncmp_P("a", FC("b"), 1) == -1);
-  CHECK(strncmp_P("b", FC("a"), 1) == 1);
-  CHECK(strncmp_P("a", FC("a"), 0) == 0);
-  CHECK(strncmp_P("a", FC("b"), 2) == -1);
-  CHECK(strncmp_P("b", FC("a"), 2) == 1);
-  CHECK(strncmp_P("a", FC("a"), 2) == 0);
+  CHECK(strncmp_P("a", PSTR("b"), 0) == 0);
+  CHECK(strncmp_P("a", PSTR("b"), 1) == -1);
+  CHECK(strncmp_P("b", PSTR("a"), 1) == 1);
+  CHECK(strncmp_P("a", PSTR("a"), 0) == 0);
+  CHECK(strncmp_P("a", PSTR("b"), 2) == -1);
+  CHECK(strncmp_P("b", PSTR("a"), 2) == 1);
+  CHECK(strncmp_P("a", PSTR("a"), 2) == 0);
 }
 
 TEST_CASE("strcmp_P") {
-  CHECK(strcmp_P("a", FC("b")) == -1);
-  CHECK(strcmp_P("b", FC("a")) == 1);
-  CHECK(strcmp_P("a", FC("a")) == 0);
-  CHECK(strcmp_P("aa", FC("ab")) == -1);
-  CHECK(strcmp_P("ab", FC("aa")) == 1);
-  CHECK(strcmp_P("aa", FC("aa")) == 0);
+  CHECK(strcmp_P("a", PSTR("b")) == -1);
+  CHECK(strcmp_P("b", PSTR("a")) == 1);
+  CHECK(strcmp_P("a", PSTR("a")) == 0);
+  CHECK(strcmp_P("aa", PSTR("ab")) == -1);
+  CHECK(strcmp_P("ab", PSTR("aa")) == 1);
+  CHECK(strcmp_P("aa", PSTR("aa")) == 0);
 }
 
 TEST_CASE("memcpy_P") {
   char dst[4];
-  CHECK(memcpy_P(dst, FC("ABC"), 4) == dst);
+  CHECK(memcpy_P(dst, PSTR("ABC"), 4) == dst);
   CHECK(dst[0] == 'A');
   CHECK(dst[1] == 'B');
   CHECK(dst[2] == 'C');
@@ -87,7 +93,7 @@ TEST_CASE("memcpy_P") {
 }
 
 TEST_CASE("BoundedReader<const __FlashStringHelper*>") {
-  using namespace ARDUINOJSON_NAMESPACE;
+  using namespace ArduinoJson::detail;
 
   SECTION("read") {
     BoundedReader<const __FlashStringHelper*> reader(F("\x01\xFF"), 2);
@@ -127,7 +133,7 @@ TEST_CASE("BoundedReader<const __FlashStringHelper*>") {
 }
 
 TEST_CASE("Reader<const __FlashStringHelper*>") {
-  using namespace ARDUINOJSON_NAMESPACE;
+  using namespace ArduinoJson::detail;
 
   SECTION("read()") {
     Reader<const __FlashStringHelper*> reader(F("\x01\xFF\x00\x12"));
@@ -164,4 +170,22 @@ TEST_CASE("Reader<const __FlashStringHelper*>") {
     REQUIRE(buffer[5] == 'F');
     REQUIRE(buffer[6] == 'g');
   }
+}
+
+static void testStringification(DeserializationError error,
+                                std::string expected) {
+  const __FlashStringHelper* s = error.f_str();
+  CHECK(reinterpret_cast<const char*>(convertFlashToPtr(s)) == expected);
+}
+
+#define TEST_STRINGIFICATION(symbol) \
+  testStringification(DeserializationError::symbol, #symbol)
+
+TEST_CASE("DeserializationError::f_str()") {
+  TEST_STRINGIFICATION(Ok);
+  TEST_STRINGIFICATION(EmptyInput);
+  TEST_STRINGIFICATION(IncompleteInput);
+  TEST_STRINGIFICATION(InvalidInput);
+  TEST_STRINGIFICATION(NoMemory);
+  TEST_STRINGIFICATION(TooDeep);
 }

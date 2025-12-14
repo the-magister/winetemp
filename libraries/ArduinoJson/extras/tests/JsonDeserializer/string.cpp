@@ -1,10 +1,15 @@
-// ArduinoJson - arduinojson.org
-// Copyright Benoit Blanchon 2014-2020
+// ArduinoJson - https://arduinojson.org
+// Copyright © 2014-2025, Benoit BLANCHON
 // MIT License
 
 #define ARDUINOJSON_DECODE_UNICODE 1
 #include <ArduinoJson.h>
 #include <catch.hpp>
+
+#include "Allocators.hpp"
+
+using ArduinoJson::detail::sizeofArray;
+using ArduinoJson::detail::sizeofObject;
 
 TEST_CASE("Valid JSON strings value") {
   struct TestCase {
@@ -35,7 +40,7 @@ TEST_CASE("Valid JSON strings value") {
   };
   const size_t testCount = sizeof(testCases) / sizeof(testCases[0]);
 
-  DynamicJsonDocument doc(4096);
+  JsonDocument doc;
 
   for (size_t i = 0; i < testCount; i++) {
     const TestCase& testCase = testCases[i];
@@ -46,11 +51,29 @@ TEST_CASE("Valid JSON strings value") {
   }
 }
 
+TEST_CASE("\\u0000") {
+  JsonDocument doc;
+
+  DeserializationError err = deserializeJson(doc, "\"wx\\u0000yz\"");
+  REQUIRE(err == DeserializationError::Ok);
+
+  const char* result = doc.as<const char*>();
+  CHECK(result[0] == 'w');
+  CHECK(result[1] == 'x');
+  CHECK(result[2] == 0);
+  CHECK(result[3] == 'y');
+  CHECK(result[4] == 'z');
+  CHECK(result[5] == 0);
+
+  CHECK(doc.as<JsonString>().size() == 5);
+  CHECK(doc.as<std::string>().size() == 5);
+}
+
 TEST_CASE("Truncated JSON string") {
   const char* testCases[] = {"\"hello", "\'hello", "'\\u", "'\\u00", "'\\u000"};
   const size_t testCount = sizeof(testCases) / sizeof(testCases[0]);
 
-  DynamicJsonDocument doc(4096);
+  JsonDocument doc;
 
   for (size_t i = 0; i < testCount; i++) {
     const char* input = testCases[i];
@@ -60,12 +83,28 @@ TEST_CASE("Truncated JSON string") {
   }
 }
 
+TEST_CASE("Escape single quote in single quoted string") {
+  JsonDocument doc;
+
+  DeserializationError err = deserializeJson(doc, "'ab\\\'cd'");
+  REQUIRE(err == DeserializationError::Ok);
+  CHECK(doc.as<std::string>() == "ab\'cd");
+}
+
+TEST_CASE("Escape double quote in double quoted string") {
+  JsonDocument doc;
+
+  DeserializationError err = deserializeJson(doc, "'ab\\\"cd'");
+  REQUIRE(err == DeserializationError::Ok);
+  CHECK(doc.as<std::string>() == "ab\"cd");
+}
+
 TEST_CASE("Invalid JSON string") {
   const char* testCases[] = {"'\\u'",     "'\\u000g'", "'\\u000'",
                              "'\\u000G'", "'\\u000/'", "'\\x1234'"};
   const size_t testCount = sizeof(testCases) / sizeof(testCases[0]);
 
-  DynamicJsonDocument doc(4096);
+  JsonDocument doc;
 
   for (size_t i = 0; i < testCount; i++) {
     const char* input = testCases[i];
@@ -74,16 +113,102 @@ TEST_CASE("Invalid JSON string") {
   }
 }
 
-TEST_CASE("Not enough room to duplicate the string") {
-  DynamicJsonDocument doc(JSON_OBJECT_SIZE(0));
+TEST_CASE("Allocation of the key fails") {
+  TimebombAllocator timebomb(0);
+  SpyingAllocator spy(&timebomb);
+  JsonDocument doc(&spy);
 
-  SECTION("Quoted string") {
+  SECTION("Quoted string, first member") {
     REQUIRE(deserializeJson(doc, "{\"example\":1}") ==
             DeserializationError::NoMemory);
+    REQUIRE(spy.log() == AllocatorLog{
+                             AllocateFail(sizeofStringBuffer()),
+                         });
   }
 
-  SECTION("Non-quoted string") {
+  SECTION("Quoted string, second member") {
+    timebomb.setCountdown(3);
+    REQUIRE(deserializeJson(doc, "{\"hello\":1,\"world\"}") ==
+            DeserializationError::NoMemory);
+    REQUIRE(spy.log() ==
+            AllocatorLog{
+                Allocate(sizeofStringBuffer()),
+                Allocate(sizeofPool()),
+                Reallocate(sizeofStringBuffer(), sizeofString("hello")),
+                AllocateFail(sizeofStringBuffer()),
+                ReallocateFail(sizeofPool(), sizeofObject(1)),
+            });
+  }
+
+  SECTION("Non-Quoted string, first member") {
     REQUIRE(deserializeJson(doc, "{example:1}") ==
             DeserializationError::NoMemory);
+    REQUIRE(spy.log() == AllocatorLog{
+                             AllocateFail(sizeofStringBuffer()),
+                         });
   }
+
+  SECTION("Non-Quoted string, second member") {
+    timebomb.setCountdown(3);
+    REQUIRE(deserializeJson(doc, "{hello:1,world}") ==
+            DeserializationError::NoMemory);
+    REQUIRE(spy.log() ==
+            AllocatorLog{
+                Allocate(sizeofStringBuffer()),
+                Allocate(sizeofPool()),
+                Reallocate(sizeofStringBuffer(), sizeofString("hello")),
+                AllocateFail(sizeofStringBuffer()),
+                ReallocateFail(sizeofPool(), sizeofObject(1)),
+            });
+  }
+}
+
+TEST_CASE("String allocation fails") {
+  SpyingAllocator spy(FailingAllocator::instance());
+  JsonDocument doc(&spy);
+
+  SECTION("Input is const char*") {
+    REQUIRE(deserializeJson(doc, "\"hello\"") ==
+            DeserializationError::NoMemory);
+    REQUIRE(spy.log() == AllocatorLog{
+                             AllocateFail(sizeofStringBuffer()),
+                         });
+  }
+}
+
+TEST_CASE("Deduplicate values") {
+  SpyingAllocator spy;
+  JsonDocument doc(&spy);
+  deserializeJson(doc, "[\"example\",\"example\"]");
+
+  CHECK(doc[0].as<const char*>() == doc[1].as<const char*>());
+  REQUIRE(spy.log() ==
+          AllocatorLog{
+              Allocate(sizeofPool()),
+              Allocate(sizeofStringBuffer()),
+              Reallocate(sizeofStringBuffer(), sizeofString("example")),
+              Allocate(sizeofStringBuffer()),
+              Deallocate(sizeofStringBuffer()),
+              Reallocate(sizeofPool(), sizeofArray(2)),
+          });
+}
+
+TEST_CASE("Deduplicate keys") {
+  SpyingAllocator spy;
+  JsonDocument doc(&spy);
+  deserializeJson(doc, "[{\"example\":1},{\"example\":2}]");
+
+  const char* key1 = doc[0].as<JsonObject>().begin()->key().c_str();
+  const char* key2 = doc[1].as<JsonObject>().begin()->key().c_str();
+  CHECK(key1 == key2);
+
+  REQUIRE(spy.log() ==
+          AllocatorLog{
+              Allocate(sizeofPool()),
+              Allocate(sizeofStringBuffer()),
+              Reallocate(sizeofStringBuffer(), sizeofString("example")),
+              Allocate(sizeofStringBuffer()),
+              Deallocate(sizeofStringBuffer()),
+              Reallocate(sizeofPool(), sizeofArray(2) + 2 * sizeofObject(1)),
+          });
 }
