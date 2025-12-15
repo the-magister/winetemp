@@ -98,6 +98,7 @@ void loop() {
     StaticJsonDocument<200> doc;
     doc["Temperature"] = values.temperature;
     doc["Humidity"] = values.humidity;
+    doc["Interval"] = SEND_INTERVAL/1000UL;
 
     char output[200];
     serializeJson(doc, output, sizeof(output));
