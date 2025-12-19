@@ -1,3 +1,6 @@
+// Compile for Adafruit Feather HUZZAH ESP8266.
+// 80 MHz
+
 /***************************************************
   Adafruit MQTT Library ESP8266 Example
 
